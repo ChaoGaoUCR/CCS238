@@ -1,63 +1,44 @@
-import requests
 import gzip
-import io
-import random
-from Bio import SeqIO
-from collections import Counter
-import seaborn as sns
+from collections import defaultdict
+from itertools import product
 import matplotlib.pyplot as plt
+from Bio import SeqIO
+import matplotlib.cm as cm
 
-# Download the genome file
-url = "https://ftp.ncbi.nlm.nih.gov/genomes/genbank/bacteria/Streptomyces_californicus/latest_assembly_versions/GCA_000715715.1_ASM71571v1/GCA_000715715.1_ASM71571v1_genomic.fna.gz"
-response = requests.get(url)
+# Function to count 3-mers in a given sequence
+def count_kmers(sequence, k):
+    kmers = defaultdict(int)
+    for i in range(len(sequence) - k + 1):
+        kmer = sequence[i:i + k]
+        if "N" not in kmer:  # Ignore kmers with undefined nucleotides
+            kmers[kmer] += 1
+    return kmers
 
-# Read and parse the genome file
-with gzip.open(io.BytesIO(response.content), "rt") as f:
-    genome_record = list(SeqIO.parse(f, "fasta"))[0]
-    genome = str(genome_record.seq)
+# Read the gzipped FASTA file and count 3-mers
+filename = "GCA_000715715.1_ASM71571v1_genomic.fna.gz"
+k = 3
+total_kmers = defaultdict(int)
 
-# Function to count 3-mers in a sequence
-def count_kmers(sequence, k=3):
-    kmers = [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
-    return Counter(kmers)
+with gzip.open(filename, "rt") as handle:
+    for record in SeqIO.parse(handle, "fasta"):
+        sequence = str(record.seq).upper()
+        kmers = count_kmers(sequence, k)
+        for kmer, count in kmers.items():
+            total_kmers[kmer] += count
 
-# Count 3-mers in the bacterial genome
-bacterial_kmer_counts = count_kmers(genome)
+# Generate a histogram of 3-mer frequencies using Matplotlib
+all_kmers = ["".join(x) for x in product("ACGT", repeat=k)]
+counts = [total_kmers[kmer] for kmer in sorted(all_kmers)]
 
-# Generate a random DNA sequence of the same length
-nucleotides = ["A", "C", "G", "T"]
-random_genome = "".join(random.choices(nucleotides, k=len(genome)))
+# Create a colormap with the number of colors equal to the number of bars
+cmap = cm.get_cmap("viridis", len(all_kmers))
 
-# Count 3-mers in the random genome
-random_kmer_counts = count_kmers(random_genome)
-
-# Function to plot the histograms and save as image files
-def plot_histogram(kmer_counts, title, filename):
-    sns.barplot(x=list(kmer_counts.keys()), y=list(kmer_counts.values()))
-    plt.xlabel("3-mers")
-    plt.ylabel("Frequency")
-    plt.title(title)
-    plt.xticks(rotation=90)
-    plt.savefig(filename, dpi=300, bbox_inches="tight")
-    plt.show()
-
-# Function to print all 3-mers and their counts
-def print_kmers(kmer_counts, title):
-    print(title)
-    for kmer, count in kmer_counts.items():
-        print(f"{kmer}: {count}")
-
-# Print all 3-mers and their counts for both genomes
-print_kmers(bacterial_kmer_counts, "Bacterial Genome 3-mers:")
-print_kmers(random_kmer_counts, "Random Genome 3-mers:")
-
-# Plot histograms for both genomes and save as image files
-plot_histogram(bacterial_kmer_counts, "Bacterial Genome 3-mer Distribution", "bacterial_histogram.png")
-plot_histogram(random_kmer_counts, "Random Genome 3-mer Distribution", "random_histogram.png")
-
-# Identify the most common 3-mers
-most_common_bacterial_kmers = bacterial_kmer_counts.most_common(5)
-print("Most common 3-mers in the bacterial genome:", most_common_bacterial_kmers)
-
-# Biological meaning of the most common 3-mers is beyond the scope of this code solution.
-
+plt.figure(figsize=(12, 6))
+plt.bar(sorted(all_kmers), counts, color=cmap.colors)
+plt.xlabel('3-mers')
+plt.ylabel('Frequency')
+plt.title('Histogram of 3-mer Frequencies')
+plt.xticks(rotation=90)
+plt.show()
+filename = "colorful.png"
+plt.savefig(filename, dpi=300, bbox_inches="tight")
